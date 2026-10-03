@@ -5,6 +5,10 @@ project(EchoSpace VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Windows: build the C++ runtime into the plugin, so it doesn't depend on the
+# Visual C++ Redistributable being installed on the PC that loads it.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 # Downloads JUCE 8.0.15 automatically on the first configure (about 100 MB).
 include(FetchContent)
 FetchContent_Declare(JUCE
