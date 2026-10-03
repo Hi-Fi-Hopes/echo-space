@@ -1,10 +1,16 @@
-# Builds the Windows VST3 on GitHub's own Windows machines every time code is pushed.
-# The finished plugin appears under the repo's "Actions" tab as a downloadable zip.
+# Builds the Windows VST3 on GitHub's own Windows machines every time code is pushed to main.
+# The finished plugin is:
+#   1. attached to the run (Actions tab -> the run -> "Artifacts"), and
+#   2. committed to the "builds" branch as EchoSpace-VST3-Windows.zip
 name: Build Windows VST3
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   windows:
@@ -23,3 +29,17 @@ jobs:
         with:
           name: EchoSpace-VST3-Windows
           path: build/EchoSpace_artefacts/Release/VST3/
+
+      - name: Publish zip to the builds branch
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build/EchoSpace_artefacts/Release/VST3/Echo Space.vst3" -DestinationPath "$env:RUNNER_TEMP/EchoSpace-VST3-Windows.zip"
+          git config user.name  "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git switch --orphan builds
+          Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+          Copy-Item "$env:RUNNER_TEMP/EchoSpace-VST3-Windows.zip" .
+          "Built from $env:GITHUB_SHA" | Out-File -Encoding utf8 BUILD-INFO.txt
+          git add EchoSpace-VST3-Windows.zip BUILD-INFO.txt
+          git commit -m "Windows VST3 build from $env:GITHUB_SHA"
+          git push --force origin builds
