@@ -3,10 +3,22 @@
 namespace es
 {
     // Order matters: it's the order of the engine selector. New engines get appended.
-    enum class EngineType { digital = 0, tape, room, hall, plate };
-    constexpr int numEngines = 5;
+    enum class EngineType { digital = 0, tape, room, hall, plate,           // phase 1
+                            analog, reverse, spring, shimmer, dual, pattern }; // phase 2
+    constexpr int numEngines = 11;
 
-    inline bool isReverb (EngineType e) { return e == EngineType::room || e == EngineType::hall || e == EngineType::plate; }
+    inline bool isReverb (EngineType e)
+    {
+        return e == EngineType::room || e == EngineType::hall || e == EngineType::plate
+            || e == EngineType::spring || e == EngineType::shimmer;
+    }
+
+    // Engines that respond to the Speed (mod rate) knob.
+    inline bool usesSpeed (EngineType e)
+    {
+        return e == EngineType::tape || e == EngineType::analog || e == EngineType::room || e == EngineType::hall
+            || e == EngineType::plate || e == EngineType::spring || e == EngineType::shimmer;
+    }
 
     enum class Routing { series = 0, parallel, split };
 
@@ -30,11 +42,13 @@ namespace es
         float width     = 1.0f;    // 0 mono .. 1.5 extra wide
         float modRateHz = 0.8f;
         float duck      = 0.0f;    // 0..1
+        float drive     = 0.0f;    // 0..1, saturation before the engine
     };
 
     struct GlobalSettings
     {
         Routing routing   = Routing::series;
+        float   inputDb   = 0.0f;
         bool    freeze    = false;
         bool    trails    = true;
         float   outputDb  = 0.0f;

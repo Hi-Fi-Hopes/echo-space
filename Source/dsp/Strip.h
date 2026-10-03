@@ -2,6 +2,7 @@
 
 #include "DelayEngine.h"
 #include "ReverbEngine.h"
+#include "ExtraEngines.h"
 
 namespace es
 {
@@ -21,6 +22,10 @@ namespace es
             sr = (float) sampleRate;
             delay.prepare (sampleRate);
             reverb.prepare (sampleRate);
+            reverse.prepare (sampleRate);
+            multiTap.prepare (sampleRate);
+            spring.prepare (sampleRate);
+            shimmer.prepare (sampleRate);
 
             for (auto* v : { &inL, &inR, &wetL, &wetR })
                 v->assign ((size_t) maxBlock, 0.0f);
@@ -37,8 +42,7 @@ namespace es
 
         void reset()
         {
-            delay.reset();
-            reverb.reset();
+            resetEngines();
             for (auto& f : wetFilters) f.clear();
             env = 0.0f;
             first = true;
@@ -86,7 +90,7 @@ namespace es
 
             if (idle)
             {
-                if (! tailCleared) { delay.reset(); reverb.reset(); tailCleared = true; }
+                if (! tailCleared) { resetEngines(); tailCleared = true; }
                 for (int i = 0; i < n; ++i) { outWetL[i] = outWetR[i] = 0.0f; dryGainOut[i] = 1.0f; }
                 return;
             }
@@ -97,10 +101,34 @@ namespace es
             std::copy (inLeft,  inLeft  + n, inL.begin());
             std::copy (inRight, inRight + n, inR.begin());
 
-            if (isReverb (current))
-                reverb.process (inL.data(), inR.data(), wetL.data(), wetR.data(), n, engineSettings, freeze, inputLevel);
-            else
-                delay.process (inL.data(), inR.data(), wetL.data(), wetR.data(), n, engineSettings, freeze, inputLevel);
+            // Drive: saturation on the way into the engine (the dry signal stays clean).
+            // Normalised so a -6 dBFS signal comes out at the same level, quieter parts come up.
+            if (s.drive > 0.001f)
+            {
+                const float g = 1.0f + 7.0f * s.drive;
+                const float norm = 0.5f / std::tanh (0.5f * g);
+                for (int i = 0; i < n; ++i)
+                {
+                    inL[(size_t) i] = lerp (inL[(size_t) i], std::tanh (g * inL[(size_t) i]) * norm, s.drive);
+                    inR[(size_t) i] = lerp (inR[(size_t) i], std::tanh (g * inR[(size_t) i]) * norm, s.drive);
+                }
+            }
+
+            auto* il = inL.data(); auto* ir = inR.data(); auto* wl = wetL.data(); auto* wr = wetR.data();
+            switch (current)
+            {
+                case EngineType::digital:
+                case EngineType::tape:
+                case EngineType::analog:  delay.process    (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::room:
+                case EngineType::hall:
+                case EngineType::plate:   reverb.process   (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::reverse: reverse.process  (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::dual:
+                case EngineType::pattern: multiTap.process (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::spring:  spring.process   (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::shimmer: shimmer.process  (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+            }
 
             for (int i = 0; i < n; ++i)
             {
@@ -134,8 +162,7 @@ namespace es
             if (pendingSwitch && switchGain.getCurrent() == 0.0f && ! switchGain.isRamping())
             {
                 current = s.engine;
-                delay.reset();
-                reverb.reset();
+                resetEngines();
                 for (auto& f : wetFilters) f.clear();
                 pendingSwitch = false;
                 switchGain.setTarget (1.0f);
@@ -146,8 +173,17 @@ namespace es
 
     private:
         float sr = 44100.0f;
+        void resetEngines()
+        {
+            delay.reset(); reverb.reset(); reverse.reset(); multiTap.reset(); spring.reset(); shimmer.reset();
+        }
+
         DelayEngine delay;
         ReverbEngine reverb;
+        ReverseEngine reverse;
+        MultiTapEngine multiTap;
+        SpringEngine spring;
+        ShimmerEngine shimmer;
         EngineType current = EngineType::digital;
 
         std::vector<float> inL, inR, wetL, wetR;
@@ -169,6 +205,7 @@ namespace es
             for (auto* v : { &midL, &midR, &wAL, &wAR, &wBL, &wBR, &dA, &dB, &monoL, &monoR })
                 v->assign ((size_t) maxBlock, 0.0f);
             outGain.reset (sampleRate, 0.03);
+            inGain.reset (sampleRate, 0.03);
             first = true;
         }
 
@@ -178,8 +215,17 @@ namespace es
                       const StripSettings& sa, const StripSettings& sb, const GlobalSettings& g)
         {
             const float og = dbToGain (g.outputDb);
-            if (first) { outGain.setCurrentAndTarget (og); first = false; }
+            const float ig = dbToGain (g.inputDb);
+            if (first) { outGain.setCurrentAndTarget (og); inGain.setCurrentAndTarget (ig); first = false; }
             outGain.setTarget (og);
+            inGain.setTarget (ig);
+
+            for (int i = 0; i < n; ++i)
+            {
+                const float gi = inGain.next();
+                left[i]  *= gi;
+                right[i] *= gi;
+            }
 
             switch (g.routing)
             {
@@ -242,7 +288,7 @@ namespace es
     private:
         Strip a, b;
         std::vector<float> midL, midR, wAL, wAR, wBL, wBR, dA, dB, monoL, monoR;
-        Ramp outGain;
+        Ramp outGain, inGain;
         bool first = true;
     };
 }

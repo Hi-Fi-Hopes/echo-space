@@ -14,6 +14,10 @@ namespace es
         TAPE      Control 1 = Age    (darker, more saturated repeats)
                   Control 2 = Wow & flutter (pitch wobble; speed follows Mod Rate)
 
+        ANALOG    Bucket-brigade style: repeats get darker as the time gets longer.
+                  Control 1 = Mod depth (chorus-like wobble; speed follows Mod Rate)
+                  Control 2 = Grit (saturation)
+
         Loop:  in --> [ + ] --> saturate --> delay --> low cut --> tone (low-pass) --> wet out
                        ^                                                     |
                        '------------------ feedback gain <-------------------'
@@ -39,7 +43,7 @@ namespace es
         void reset()
         {
             bufL.clear(); bufR.clear();
-            hpL.clear(); hpR.clear(); lpL.clear(); lpR.clear();
+            hpL.clear(); hpR.clear(); lpL.clear(); lpR.clear(); lp2L.clear(); lp2R.clear();
             fbL = fbR = 0.0f;
             holdL = holdR = 0.0f; holdCounter = 0.0f;
             wowPhase = flutterPhase = 0.0f; drift = 0.0f;
@@ -50,7 +54,9 @@ namespace es
         void process (const float* inL, const float* inR, float* outL, float* outR, int n,
                       const StripSettings& s, bool freeze, float inputLevel)
         {
-            const bool tape = s.engine == EngineType::tape;
+            const bool tape    = s.engine == EngineType::tape;
+            const bool analog  = s.engine == EngineType::analog;
+            const bool digital = ! tape && ! analog;
             const float targetDelay = std::min (maxDelayMs, std::max (1.0f, s.timeMs)) * 0.001f * sr;
 
             if (first)
@@ -70,15 +76,26 @@ namespace es
             const float age = tape ? s.control1 : 0.0f;
             float toneHz = expMap (s.tone, 700.0f, 20000.0f);
             if (tape) toneHz = std::min (toneHz, expMap (1.0f - age, 1800.0f, 14000.0f));
+            if (analog)
+            {
+                // Bucket-brigade chips run a slower clock for longer delays, so they get darker.
+                const float bbdHz = 9000.0f * std::sqrt (300.0f / std::max (300.0f, s.timeMs));
+                toneHz = std::min (toneHz, std::max (2200.0f, bbdHz));
+            }
             lpL.setCutoff (toneHz, sr);  lpR.setCutoff (toneHz, sr);
+            lp2L.setCutoff (toneHz, sr); lp2R.setCutoff (toneHz, sr);
 
-            const float lowCutHz = tape ? 60.0f + 90.0f * age : 40.0f;
+            const float lowCutHz = tape ? 60.0f + 90.0f * age : analog ? 80.0f : 40.0f;
             hpL.setCutoff (lowCutHz, sr); hpR.setCutoff (lowCutHz, sr);
 
-            const float drive   = tape ? 1.0f + 3.0f * age : 1.0f;
-            const float spread  = tape ? 0.0f : s.control1;
-            const float crush   = tape ? 0.0f : s.control2;
+            const float grit    = analog ? s.control2 : 0.0f;
+            const float drive   = tape ? 1.0f + 3.0f * age : analog ? 1.0f + 4.0f * grit : 1.0f;
+            const float bias    = 0.15f * grit;                      // asymmetry = even harmonics
+            const float spread  = digital ? s.control1 : 0.0f;
+            const float crush   = digital ? s.control2 : 0.0f;
             const float wowAmt  = tape ? s.control2 : 0.0f;
+            const float chorus  = analog ? s.control1 * 0.0025f * sr : 0.0f;
+            const float chorusInc = twoPi * std::max (0.05f, s.modRateHz) / sr;
 
             // Wow: slow, a few ms. Flutter: fast, a fraction of a ms. Plus random drift.
             const float wowDepth     = wowAmt * 0.0030f * sr;
@@ -108,13 +125,19 @@ namespace es
                        + flutterDepth * (1.0f + std::sin (flutterPhase))
                        + driftDepth * (1.0f + drift);
                 }
+                if (chorus > 0.0f)
+                {
+                    wowPhase += chorusInc; if (wowPhase > twoPi) wowPhase -= twoPi;
+                    d += chorus * (1.0f + std::sin (wowPhase));
+                }
 
                 // Read the echoes and shape them (shaping fades out while frozen
                 // so a frozen loop doesn't decay).
                 const float rawL = bufL.readHermite (d);
                 const float rawR = bufR.readHermite (d);
-                const float shapedL = lpL.lowpass (hpL.highpass (rawL));
-                const float shapedR = lpR.lowpass (hpR.highpass (rawR));
+                float shapedL = lpL.lowpass (hpL.highpass (rawL));
+                float shapedR = lpR.lowpass (hpR.highpass (rawR));
+                if (analog) { shapedL = lp2L.lowpass (shapedL); shapedR = lp2R.lowpass (shapedR); }   // 12 dB/oct
                 const float echoL = lerp (shapedL, rawL, fz);
                 const float echoR = lerp (shapedR, rawR, fz);
 
@@ -125,7 +148,14 @@ namespace es
                 const float loopL = lerp (echoL, echoR, spread) * fb;
                 const float loopR = lerp (echoR, echoL, spread) * fb;
 
-                if (tape)
+                if (analog)
+                {
+                    const float xl = srcL + loopL, xr = srcR + loopR;
+                    const float off = std::tanh (bias);
+                    bufL.push (lerp ((std::tanh (xl * drive + bias) - off) / drive, softLimit (xl), fz));
+                    bufR.push (lerp ((std::tanh (xr * drive + bias) - off) / drive, softLimit (xr), fz));
+                }
+                else if (tape)
                 {
                     // Tape drive saturates; while frozen it hands over to the clean
                     // limiter so the held loop doesn't sag over time.
@@ -169,7 +199,7 @@ namespace es
 
         float sr = 44100.0f;
         DelayBuffer bufL, bufR;
-        OnePole hpL, hpR, lpL, lpR;
+        OnePole hpL, hpR, lpL, lpR, lp2L, lp2R;
         Ramp delaySamples, feedback, freezeAmt, inputGain;
         Rng rng;
         float fbL = 0, fbR = 0, holdL = 0, holdR = 0, holdCounter = 0;

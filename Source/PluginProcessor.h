@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "dsp/Strip.h"
+#include "dsp/EngineTables.h"
 
 // Parameter IDs. Strip parameters are prefixed "a_" or "b_" (e.g. "a_time").
 namespace ParamIDs
@@ -22,9 +23,11 @@ namespace ParamIDs
     inline constexpr auto width    = "width";
     inline constexpr auto modRate  = "modRate";
     inline constexpr auto duck     = "duck";
+    inline constexpr auto drive    = "drive";
 
     // global
     inline constexpr auto routing  = "routing";
+    inline constexpr auto input    = "input";
     inline constexpr auto freeze   = "freeze";
     inline constexpr auto trails   = "trails";
     inline constexpr auto output   = "output";
@@ -71,6 +74,7 @@ public:
     static float divisionInBeats (int index);
     static juce::String control1Name (es::EngineType);
     static juce::String control2Name (es::EngineType);
+    static juce::String controlValueText (es::EngineType, int which, double percent);
 
     juce::AudioProcessorValueTreeState apvts;
 
@@ -78,7 +82,7 @@ private:
     struct StripParams
     {
         std::atomic<float> *on, *engine, *time, *sync, *division, *feedback, *mix, *tone,
-                           *control1, *control2, *lowCut, *highCut, *width, *modRate, *duck;
+                           *control1, *control2, *lowCut, *highCut, *width, *modRate, *duck, *drive;
     };
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
@@ -87,7 +91,7 @@ private:
 
     es::EchoSpaceDSP dsp;
     StripParams stripA {}, stripB {};
-    std::atomic<float> *pRouting = nullptr, *pFreeze = nullptr, *pTrails = nullptr, *pOutput = nullptr;
+    std::atomic<float> *pRouting = nullptr, *pInput = nullptr, *pFreeze = nullptr, *pTrails = nullptr, *pOutput = nullptr;
     double bpm = 120.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EchoSpaceProcessor)

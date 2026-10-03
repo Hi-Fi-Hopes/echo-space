@@ -55,11 +55,17 @@ namespace
         layout.add (std::make_unique<AudioParameterFloat>  (id (ParamIDs::width),    nm ("Width"), NormalisableRange<float> (0.0f, 150.0f, 0.1f), 100.0f, percent()));
         layout.add (std::make_unique<AudioParameterFloat>  (id (ParamIDs::modRate),  nm ("Mod Rate"), skewed (0.05f, 8.0f, 1.0f), 0.8f, hz()));
         layout.add (std::make_unique<AudioParameterFloat>  (id (ParamIDs::duck),     nm ("Duck"), pct(), 0.0f, percent()));
+        layout.add (std::make_unique<AudioParameterFloat>  (ParameterID { prefix + ParamIDs::drive, 2 }, nm ("Drive"), pct(), 0.0f, percent()));
     }
 }
 
 //==============================================================================
-juce::StringArray EchoSpaceProcessor::engineNames()   { return { "Digital", "Tape", "Room", "Hall", "Plate" }; }
+// Order must match es::EngineType. New engines are appended so saved projects keep their engine.
+juce::StringArray EchoSpaceProcessor::engineNames()
+{
+    return { "Digital", "Tape", "Room", "Hall", "Plate",
+             "Analog", "Reverse", "Spring", "Shimmer", "Dual", "Pattern" };
+}
 juce::StringArray EchoSpaceProcessor::routingNames()  { return { "Series", "Parallel", "Split" }; }
 juce::StringArray EchoSpaceProcessor::divisionNames()
 {
@@ -75,28 +81,61 @@ float EchoSpaceProcessor::divisionInBeats (int index)
 
 juce::String EchoSpaceProcessor::control1Name (es::EngineType e)
 {
+    using E = es::EngineType;
     switch (e)
     {
-        case es::EngineType::digital: return "Spread";
-        case es::EngineType::tape:    return "Age";
-        case es::EngineType::room:    return "Size";
-        case es::EngineType::hall:    return "Size";
-        case es::EngineType::plate:   return "Diffusion";
+        case E::digital: return "Spread";
+        case E::tape:    return "Age";
+        case E::room:    return "Size";
+        case E::hall:    return "Size";
+        case E::plate:   return "Diffusion";
+        case E::analog:  return "Mod Depth";
+        case E::reverse: return "Smear";
+        case E::spring:  return "Drip";
+        case E::shimmer: return "Shimmer";
+        case E::dual:    return "Ratio";
+        case E::pattern: return "Pattern";
     }
     return "Control 1";
 }
 
 juce::String EchoSpaceProcessor::control2Name (es::EngineType e)
 {
+    using E = es::EngineType;
     switch (e)
     {
-        case es::EngineType::digital: return "Crush";
-        case es::EngineType::tape:    return "Wow/Flutter";
-        case es::EngineType::room:    return "Early";
-        case es::EngineType::hall:    return "Mod";
-        case es::EngineType::plate:   return "Mod";
+        case E::digital: return "Crush";
+        case E::tape:    return "Wow";
+        case E::room:    return "Early";
+        case E::hall:    return "Mod";
+        case E::plate:   return "Mod";
+        case E::analog:  return "Grit";
+        case E::reverse: return "Octave";
+        case E::spring:  return "Tension";
+        case E::shimmer: return "Interval";
+        case E::dual:    return "Spread";
+        case E::pattern: return "Spread";
     }
     return "Control 2";
+}
+
+// Readout text for controls that pick from a set of values instead of a percentage.
+// Returns an empty string when the plain "nn%" readout is right.
+juce::String EchoSpaceProcessor::controlValueText (es::EngineType e, int which, double percent)
+{
+    using E = es::EngineType;
+    const float t = (float) percent * 0.01f;
+
+    if (e == E::dual && which == 1)
+        return "x" + juce::String (es::dualRatioNames[es::dualRatioIndex (t)]);
+
+    if (e == E::pattern && which == 1)
+        return juce::String (es::patternNames[es::patternIndex (t)]);
+
+    if (e == E::shimmer && which == 2)
+        return juce::String (es::shimmerIntervalNames[es::shimmerIntervalIndex (t)]);
+
+    return {};
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout EchoSpaceProcessor::createLayout()
@@ -109,6 +148,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout EchoSpaceProcessor::createLa
     addStrip (layout, "b_", "B", { 3 /*Hall*/, 160.0f, false, 8 /*1/4*/,  50.0f, 25.0f, 55.0f, 60.0f, 30.0f });
 
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { ParamIDs::routing, 1 }, "Routing", routingNames(), 0));
+    layout.add (std::make_unique<AudioParameterFloat>  (ParameterID { ParamIDs::input, 2 },   "Input",
+                                                        NormalisableRange<float> (-24.0f, 12.0f, 0.1f), 0.0f, db()));
     layout.add (std::make_unique<AudioParameterBool>   (ParameterID { ParamIDs::freeze, 1 },  "Freeze", false));
     layout.add (std::make_unique<AudioParameterBool>   (ParameterID { ParamIDs::trails, 1 },  "Trails", true));
     layout.add (std::make_unique<AudioParameterFloat>  (ParameterID { ParamIDs::output, 1 },  "Output",
@@ -126,6 +167,7 @@ EchoSpaceProcessor::EchoSpaceProcessor()
     stripA   = bindStrip ("a_");
     stripB   = bindStrip ("b_");
     pRouting = apvts.getRawParameterValue (ParamIDs::routing);
+    pInput   = apvts.getRawParameterValue (ParamIDs::input);
     pFreeze  = apvts.getRawParameterValue (ParamIDs::freeze);
     pTrails  = apvts.getRawParameterValue (ParamIDs::trails);
     pOutput  = apvts.getRawParameterValue (ParamIDs::output);
@@ -138,7 +180,7 @@ EchoSpaceProcessor::StripParams EchoSpaceProcessor::bindStrip (const juce::Strin
     return { get (ParamIDs::on), get (ParamIDs::engine), get (ParamIDs::time), get (ParamIDs::sync),
              get (ParamIDs::division), get (ParamIDs::feedback), get (ParamIDs::mix), get (ParamIDs::tone),
              get (ParamIDs::control1), get (ParamIDs::control2), get (ParamIDs::lowCut), get (ParamIDs::highCut),
-             get (ParamIDs::width), get (ParamIDs::modRate), get (ParamIDs::duck) };
+             get (ParamIDs::width), get (ParamIDs::modRate), get (ParamIDs::duck), get (ParamIDs::drive) };
 }
 
 es::StripSettings EchoSpaceProcessor::readStrip (const StripParams& p) const
@@ -163,6 +205,7 @@ es::StripSettings EchoSpaceProcessor::readStrip (const StripParams& p) const
     s.width     = p.width->load() * 0.01f;
     s.modRateHz = p.modRate->load();
     s.duck      = p.duck->load() * 0.01f;
+    s.drive     = p.drive->load() * 0.01f;
     return s;
 }
 
@@ -205,6 +248,7 @@ void EchoSpaceProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
 
     es::GlobalSettings g;
     g.routing  = (es::Routing) juce::jlimit (0, 2, (int) pRouting->load());
+    g.inputDb  = pInput->load();
     g.freeze   = pFreeze->load() > 0.5f;
     g.trails   = pTrails->load() > 0.5f;
     g.outputDb = pOutput->load();
