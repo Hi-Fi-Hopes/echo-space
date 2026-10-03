@@ -1,0 +1,25 @@
+# Builds the Windows VST3 on GitHub's own Windows machines every time code is pushed.
+# The finished plugin appears under the repo's "Actions" tab as a downloadable zip.
+name: Build Windows VST3
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (downloads JUCE)
+        run: cmake -B build -A x64
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target EchoSpace_VST3
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: EchoSpace-VST3-Windows
+          path: build/EchoSpace_artefacts/Release/VST3/
