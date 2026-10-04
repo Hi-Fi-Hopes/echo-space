@@ -4,20 +4,23 @@ namespace es
 {
     // Order matters: it's the order of the engine selector. New engines get appended.
     enum class EngineType { digital = 0, tape, room, hall, plate,           // phase 1
-                            analog, reverse, spring, shimmer, dual, pattern }; // phase 2
-    constexpr int numEngines = 11;
+                            analog, reverse, spring, shimmer, dual, pattern,  // phase 2
+                            oilCan, decay, swell, dome };                      // phase 3
+    constexpr int numEngines = 15;
 
     inline bool isReverb (EngineType e)
     {
         return e == EngineType::room || e == EngineType::hall || e == EngineType::plate
-            || e == EngineType::spring || e == EngineType::shimmer;
+            || e == EngineType::spring || e == EngineType::shimmer
+            || e == EngineType::swell  || e == EngineType::dome;
     }
 
     // Engines that respond to the Speed (mod rate) knob.
     inline bool usesSpeed (EngineType e)
     {
         return e == EngineType::tape || e == EngineType::analog || e == EngineType::room || e == EngineType::hall
-            || e == EngineType::plate || e == EngineType::spring || e == EngineType::shimmer;
+            || e == EngineType::plate || e == EngineType::spring || e == EngineType::shimmer
+            || e == EngineType::oilCan || e == EngineType::decay || e == EngineType::swell || e == EngineType::dome;
     }
 
     enum class Routing { series = 0, parallel, split };

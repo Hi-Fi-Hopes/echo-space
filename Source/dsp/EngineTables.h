@@ -26,4 +26,7 @@ namespace es
     constexpr float shimmerRatios[numShimmerIntervals]             = { 1.4983f, 2.0f, 2.9966f };
     constexpr const char* shimmerIntervalNames[numShimmerIntervals] = { "+5th", "+Oct", "+Oct+5th" };
     inline int shimmerIntervalIndex (float t) { return pickIndex (t, numShimmerIntervals); }
+
+    // SWELL: attack time of the volume swell, 10 ms .. 2 s
+    inline float swellAttackSeconds (float t) { return 0.01f * std::pow (200.0f, std::clamp (t, 0.0f, 1.0f)); }
 }

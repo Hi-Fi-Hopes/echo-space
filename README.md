@@ -1,6 +1,6 @@
 # Echo Space
 
-Dual delay / reverb VST3 for Ableton Live (Windows). Two channels (A and B), each running one of 11 engines.
+Dual delay / reverb VST3 for Ableton Live (Windows). Two channels (A and B), each running one of 15 engines.
 
 ## Install
 
@@ -14,12 +14,13 @@ Every push to `main` rebuilds the plugin automatically.
 
 ## Controls
 
-Each channel has an LED, a footswitch (on/off), an engine menu and SYNC, then six knobs over six faders.
+Each channel has an LED, a footswitch (on/off), an engine menu, TAP and SYNC, then six knobs over six faders.
 
 **Knobs:** Time · Repeats/Decay · Tone · Control 1 · Control 2 · Speed
 **Faders:** Mix · Drive · Low Cut · High Cut · Width · Duck
 
 - **Time**: delay time (or note value with SYNC on). For reverbs it's the pre-delay.
+- **TAP**: tap the button in time (2 or more taps) to set the delay time. Tapping turns SYNC off; a 2-second pause starts a new count.
 - **Repeats / Decay**: number of repeats, or reverb decay time in seconds.
 - **Speed**: modulation rate. It's greyed out on engines that don't modulate.
 - **Drive**: saturation going into the engine. The dry signal stays clean.
@@ -30,7 +31,9 @@ Each channel has an LED, a footswitch (on/off), an engine menu and SYNC, then si
 | Digital | Spread (0 = stereo, 100 = ping-pong) | Crush |
 | Tape    | Age | Wow |
 | Analog  | Mod Depth | Grit |
+| Oil Can | Wobble | Grit |
 | Reverse | Smear | Octave |
+| Decay   | Erode (each repeat wears more) | Dropouts (holes and crackle) |
 | Dual    | Ratio (2nd delay x1/4 … x2) | Spread |
 | Pattern | Pattern (Quarters, Triplets, Dotted, Gallop, Push, Rush, Swing, Late) | Spread |
 | Room    | Size | Early reflections |
@@ -38,6 +41,8 @@ Each channel has an LED, a footswitch (on/off), an engine menu and SYNC, then si
 | Plate   | Diffusion | Mod |
 | Spring  | Drip | Tension |
 | Shimmer | Shimmer amount | Interval (+5th, +Oct, +Oct+5th) |
+| Swell   | Attack (10 ms … 2 s fade-in per note) | Mod |
+| Dome    | Size | Mod |
 
 **Global**
 - **Routing**: Series (A into B), Parallel, or Split (left input → A, right input → B).

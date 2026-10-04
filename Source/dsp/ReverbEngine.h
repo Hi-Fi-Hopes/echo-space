@@ -19,6 +19,7 @@ namespace es
         Time knob     = pre-delay (time / 8, so up to 250 ms)
 
         ROOM   Control 1 = Size        Control 2 = Early reflections level
+        DOME   Control 1 = Size        Control 2 = Modulation depth
         HALL   Control 1 = Size        Control 2 = Modulation depth
         PLATE  Control 1 = Diffusion   Control 2 = Modulation depth
     */
@@ -45,7 +46,7 @@ namespace es
             static constexpr float loopApMs[N] = { 2.31f, 3.07f, 2.83f, 3.59f, 2.53f, 3.31f, 2.69f, 3.83f };
             for (int i = 0; i < N; ++i)
             {
-                lines[i].allocate ((int) (0.180f * sr));   // longest line (hall, max size) + mod headroom
+                lines[i].allocate ((int) (0.230f * sr));   // longest line (dome, max size) + mod headroom
                 loopAp[i].allocate ((int) (loopApMs[i] * 0.001f * sr));
             }
 
@@ -75,8 +76,11 @@ namespace es
             static constexpr float roomMs[N]  = { 10.1f, 12.3f, 14.9f, 16.7f, 19.3f, 21.1f, 23.9f, 26.7f };
             static constexpr float hallMs[N]  = { 33.1f, 39.7f, 45.1f, 51.3f, 57.7f, 63.1f, 70.9f, 77.3f };
             static constexpr float plateMs[N] = { 8.9f, 11.3f, 13.7f, 15.1f, 17.9f, 20.3f, 23.3f, 25.9f };
+            static constexpr float domeMs[N]  = { 47.3f, 55.1f, 63.7f, 71.9f, 81.1f, 89.3f, 97.7f, 107.9f };
 
-            const float* baseMs = type == EngineType::room ? roomMs : type == EngineType::hall ? hallMs : plateMs;
+            const float* baseMs = type == EngineType::room ? roomMs
+                                : type == EngineType::hall ? hallMs
+                                : type == EngineType::dome ? domeMs : plateMs;
 
             float size = 1.0f, inDiff = 0.6f, loopDiff = 0.35f, modDepthSec = 0.00008f, erLevel = 0.0f;
             switch (type)
@@ -90,6 +94,12 @@ namespace es
                     size = 0.6f + 0.9f * s.control1;
                     inDiff = 0.65f; loopDiff = 0.4f;
                     modDepthSec += 0.0009f * s.control2;
+                    break;
+                case EngineType::dome:
+                    // Huge, dense and slowly moving: long lines, heavy diffusion, deep modulation.
+                    size = 0.8f + 0.8f * s.control1;
+                    inDiff = 0.72f; loopDiff = 0.5f;
+                    modDepthSec += 0.0016f * s.control2;
                     break;
                 default: // plate
                     size = 1.0f;

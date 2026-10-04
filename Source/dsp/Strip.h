@@ -3,6 +3,7 @@
 #include "DelayEngine.h"
 #include "ReverbEngine.h"
 #include "ExtraEngines.h"
+#include "Phase3Engines.h"
 
 namespace es
 {
@@ -26,6 +27,9 @@ namespace es
             multiTap.prepare (sampleRate);
             spring.prepare (sampleRate);
             shimmer.prepare (sampleRate);
+            oilCan.prepare (sampleRate);
+            decayEngine.prepare (sampleRate);
+            swell.prepare (sampleRate);
 
             for (auto* v : { &inL, &inR, &wetL, &wetR })
                 v->assign ((size_t) maxBlock, 0.0f);
@@ -122,7 +126,11 @@ namespace es
                 case EngineType::analog:  delay.process    (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
                 case EngineType::room:
                 case EngineType::hall:
-                case EngineType::plate:   reverb.process   (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::plate:
+                case EngineType::dome:    reverb.process   (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::oilCan:  oilCan.process   (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::decay:   decayEngine.process (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
+                case EngineType::swell:   swell.process    (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
                 case EngineType::reverse: reverse.process  (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
                 case EngineType::dual:
                 case EngineType::pattern: multiTap.process (il, ir, wl, wr, n, engineSettings, freeze, inputLevel); break;
@@ -176,6 +184,7 @@ namespace es
         void resetEngines()
         {
             delay.reset(); reverb.reset(); reverse.reset(); multiTap.reset(); spring.reset(); shimmer.reset();
+            oilCan.reset(); decayEngine.reset(); swell.reset();
         }
 
         DelayEngine delay;
@@ -184,6 +193,9 @@ namespace es
         MultiTapEngine multiTap;
         SpringEngine spring;
         ShimmerEngine shimmer;
+        OilCanEngine oilCan;
+        DecayEngine decayEngine;
+        SwellEngine swell;
         EngineType current = EngineType::digital;
 
         std::vector<float> inL, inR, wetL, wetR;

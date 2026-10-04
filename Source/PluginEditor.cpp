@@ -317,9 +317,9 @@ EngineSelector::EngineSelector (juce::RangedAudioParameter& param)
     auto add = [&] (E e) { addItem (names[(int) e].toUpperCase(), (int) e + 1); };
 
     addSectionHeading ("DELAYS");
-    for (auto e : { E::digital, E::tape, E::analog, E::reverse, E::dual, E::pattern }) add (e);
+    for (auto e : { E::digital, E::tape, E::analog, E::oilCan, E::reverse, E::decay, E::dual, E::pattern }) add (e);
     addSectionHeading ("REVERBS");
-    for (auto e : { E::room, E::hall, E::plate, E::spring, E::shimmer }) add (e);
+    for (auto e : { E::room, E::hall, E::plate, E::spring, E::shimmer, E::swell, E::dome }) add (e);
 
     onChange = [this] { if (getSelectedId() > 0) attachment.setValueAsCompleteGesture ((float) (getSelectedId() - 1)); };
     attachment.sendInitialUpdate();
@@ -345,8 +345,9 @@ StripPanel::StripPanel (EchoSpaceProcessor& p, const juce::String& pre, const ju
 {
     syncButton.setClickingTogglesState (true);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &onSwitch, &syncButton, &engineBox })
+    for (auto* c : std::initializer_list<juce::Component*> { &onSwitch, &syncButton, &tapButton, &engineBox })
         addAndMakeVisible (c);
+    tapButton.onClick = [this] { tap(); };
     for (auto* k : knobs())  addAndMakeVisible (k);
     for (auto* f : faders()) addAndMakeVisible (f);
     addChildComponent (division);
@@ -390,6 +391,40 @@ StripPanel::StripPanel (EchoSpaceProcessor& p, const juce::String& pre, const ju
     refresh();
 }
 
+void StripPanel::tap()
+{
+    // Tap tempo: average the gaps between the last few taps and set the delay Time.
+    // A pause of more than 2 seconds starts a fresh count.
+    const double now = juce::Time::getMillisecondCounterHiRes();
+    if (! taps.empty() && now - taps.back() > 2000.0)
+        taps.clear();
+    taps.push_back (now);
+    if (taps.size() > 5)
+        taps.erase (taps.begin());
+
+    // Flash the button for each tap
+    tapButton.setToggleState (true, juce::dontSendNotification);
+    juce::Component::SafePointer<juce::TextButton> safe (&tapButton);
+    juce::Timer::callAfterDelay (90, [safe] { if (safe != nullptr) safe->setToggleState (false, juce::dontSendNotification); });
+
+    if (taps.size() < 2)
+        return;
+
+    const double ms = (taps.back() - taps.front()) / (double) (taps.size() - 1);
+
+    auto setParam = [this] (const char* id, float value)
+    {
+        if (auto* p = apvts.getParameter (prefix + id))
+        {
+            p->beginChangeGesture();
+            p->setValueNotifyingHost (p->convertTo0to1 (value));
+            p->endChangeGesture();
+        }
+    };
+    setParam (ParamIDs::sync, 0.0f);                               // tapped time replaces tempo sync
+    setParam (ParamIDs::time, (float) juce::jlimit (1.0, 2000.0, ms));
+}
+
 void StripPanel::setControlText (Control& c, int which)
 {
     c.slider.textFromValueFunction = [this, which] (double v)
@@ -431,6 +466,7 @@ void StripPanel::refresh()
         c->slider.updateText();
 
     syncButton.setEnabled (! reverb);
+    tapButton.setEnabled (! reverb);
     time.setVisible (! synced);
     division.setVisible (synced);
 
@@ -507,6 +543,8 @@ void StripPanel::resized()
     onSwitch.setBounds (header.removeFromRight (44));
     header.removeFromRight (12);
     syncButton.setBounds (header.removeFromRight (62).withSizeKeepingCentre (62, 28));
+    header.removeFromRight (8);
+    tapButton.setBounds (header.removeFromRight (52).withSizeKeepingCentre (52, 28));
     header.removeFromRight (12);
     engineBox.setBounds (header.withSizeKeepingCentre (header.getWidth(), 34));
 

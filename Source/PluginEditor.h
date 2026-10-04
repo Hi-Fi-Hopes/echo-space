@@ -94,7 +94,9 @@ private:
     int lastEngine = -1, lastSync = -1, lastOn = -1;
 
     Footswitch onSwitch;
-    juce::TextButton syncButton { "SYNC" };
+    juce::TextButton syncButton { "SYNC" }, tapButton { "TAP" };
+    std::vector<double> taps;                 // tap times in ms
+    void tap();
     EngineSelector engineBox;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> onAttach, syncAttach;
 

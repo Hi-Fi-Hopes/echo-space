@@ -64,7 +64,8 @@ namespace
 juce::StringArray EchoSpaceProcessor::engineNames()
 {
     return { "Digital", "Tape", "Room", "Hall", "Plate",
-             "Analog", "Reverse", "Spring", "Shimmer", "Dual", "Pattern" };
+             "Analog", "Reverse", "Spring", "Shimmer", "Dual", "Pattern",
+             "Oil Can", "Decay", "Swell", "Dome" };
 }
 juce::StringArray EchoSpaceProcessor::routingNames()  { return { "Series", "Parallel", "Split" }; }
 juce::StringArray EchoSpaceProcessor::divisionNames()
@@ -95,6 +96,10 @@ juce::String EchoSpaceProcessor::control1Name (es::EngineType e)
         case E::shimmer: return "Shimmer";
         case E::dual:    return "Ratio";
         case E::pattern: return "Pattern";
+        case E::oilCan:  return "Wobble";
+        case E::decay:   return "Erode";
+        case E::swell:   return "Attack";
+        case E::dome:    return "Size";
     }
     return "Control 1";
 }
@@ -115,6 +120,10 @@ juce::String EchoSpaceProcessor::control2Name (es::EngineType e)
         case E::shimmer: return "Interval";
         case E::dual:    return "Spread";
         case E::pattern: return "Spread";
+        case E::oilCan:  return "Grit";
+        case E::decay:   return "Dropouts";
+        case E::swell:   return "Mod";
+        case E::dome:    return "Mod";
     }
     return "Control 2";
 }
@@ -134,6 +143,12 @@ juce::String EchoSpaceProcessor::controlValueText (es::EngineType e, int which, 
 
     if (e == E::shimmer && which == 2)
         return juce::String (es::shimmerIntervalNames[es::shimmerIntervalIndex (t)]);
+
+    if (e == E::swell && which == 1)
+    {
+        const float sec = es::swellAttackSeconds (t);
+        return sec < 1.0f ? juce::String (juce::roundToInt (sec * 1000.0f)) + " ms" : juce::String (sec, 2) + " s";
+    }
 
     return {};
 }
